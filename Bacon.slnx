@@ -1,0 +1,15 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="Bacon.Build/Bacon.Build.csproj" />
+  <Project Path="Bacon.Generator/Bacon.Generator.csproj" />
+  <Project Path="Bacon.Run/Bacon.Run.csproj" />
+  <Project Path="Bacon.Tools/Bacon.Tools.csproj" />
+</Solution>

@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "Bacon.Run": {
+      "commandName": "Project"
+    }
+  }
+}
