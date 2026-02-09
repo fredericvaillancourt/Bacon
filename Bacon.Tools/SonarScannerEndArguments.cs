@@ -6,5 +6,5 @@ namespace Bacon.Tools;
 public partial class SonarScannerEndArguments : SonarScannerArguments
 {
     [Parameter("d")]
-    public string[]? Sonar { get; set; }
+    public IReadOnlyDictionary<string, string>? Defines { get; }
 }

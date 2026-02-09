@@ -8,10 +8,10 @@ public partial class DotNetMsBuildArguments : DotNetArguments
     public string Solution { get; }
 
     [Parameter("target")]
-    public string? Target { get; } //TODO: This is a collection which is separated by ; when --target, but use -t multiple time ...
+    public IReadOnlyList<string>? Target { get; }
 
     [Parameter("property")]
-    public string? Properties { get; } //TODO: This is a collection which is separated by ; when --property, but use -p multiple time ... Also is a key=value ...
+    public IReadOnlyDictionary<string, string>? Properties { get; }
 
     //[Parameter("logger")]
     //public string? Logger { get; }
@@ -46,6 +46,9 @@ public partial class DotNetMsBuildArguments : DotNetArguments
 
     [Parameter("nodeReuse")]
     public bool? NodeReuse { get; }
+
+    [Parameter("getProperty")]
+    public IReadOnlyList<string>? GetProperty { get; }
 }
 
 //public enum DotNetBuildTerminalLogger

@@ -3,15 +3,10 @@ using System.Runtime.CompilerServices;
 
 namespace Bacon.Generator;
 
-internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnumerable<T>
+internal readonly struct EquatableArray<T>(T[]? array) : IEquatable<EquatableArray<T>>, IEnumerable<T>
     where T : IEquatable<T>
 {
-    private readonly T[] _array;
-
-    public EquatableArray(T[]? array)
-    {
-        _array = array ?? [];
-    }
+    private readonly T[] _array = array ?? [];
 
     public ref readonly T this[int index]
     {

@@ -52,7 +52,7 @@ namespace Bacon.Generator;
 
 internal struct HashCode
 {
-    private static readonly uint s_seed = GenerateGlobalSeed();
+    private static readonly uint Seed = GenerateGlobalSeed();
 
     private const uint Prime1 = 2654435761U;
     private const uint Prime2 = 2246822519U;
@@ -260,10 +260,10 @@ internal struct HashCode
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Initialize(out uint v1, out uint v2, out uint v3, out uint v4)
     {
-        v1 = s_seed + Prime1 + Prime2;
-        v2 = s_seed + Prime2;
-        v3 = s_seed;
-        v4 = s_seed - Prime1;
+        v1 = Seed + Prime1 + Prime2;
+        v2 = Seed + Prime2;
+        v3 = Seed;
+        v4 = Seed - Prime1;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -286,7 +286,7 @@ internal struct HashCode
 
     private static uint MixEmptyState()
     {
-        return s_seed + Prime5;
+        return Seed + Prime5;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

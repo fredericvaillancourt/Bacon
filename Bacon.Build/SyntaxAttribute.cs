@@ -1,4 +1,7 @@
 ﻿namespace Bacon.Build;
 
 [AttributeUsage(AttributeTargets.Class)]
-public class SyntaxAttribute(string Syntax) : Attribute;
+public sealed class SyntaxAttribute(string syntax) : Attribute
+{
+    public string Syntax => syntax;
+}

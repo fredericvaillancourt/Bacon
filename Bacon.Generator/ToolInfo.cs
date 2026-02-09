@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Bacon.Generator;
 
-internal record ToolInfo(
+internal sealed record ToolInfo(
     string CommandName,
     ToolLocation Location,
     string? BuildOutputType,

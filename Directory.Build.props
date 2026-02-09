@@ -5,7 +5,7 @@
     <Authors>Frédéric Vaillancourt</Authors>
     <Company></Company>
     <Description>Build automation library</Description>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/fredericvaillancourt/Bacon</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -14,6 +14,8 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedAllSources>true</EmbedAllSources>
     <DebugType>portable</DebugType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageOutputPath>..\Output</PackageOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\README.md">

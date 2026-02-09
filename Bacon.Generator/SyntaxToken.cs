@@ -1,3 +1,3 @@
 ﻿namespace Bacon.Generator;
 
-internal readonly record struct SyntaxToken(SyntaxTokenType Type, char Separator, string? Value);
+internal readonly record struct SyntaxToken(SyntaxTokenType Type, SyntaxQuoteStyle QuoteStyle, char Separator, string? Value);

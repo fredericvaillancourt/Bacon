@@ -9,7 +9,7 @@ public partial class DockerBuildArguments : DockerArguments
     public string? File { get; }
 
     [Parameter("tag")]
-    public string[]? Tags { get; }
+    public IReadOnlyList<string>? Tags { get; }
 
     [Parameter("target")]
     public string? Target { get; }

@@ -5,12 +5,14 @@ internal readonly record struct ParamType(string Name, SupportedParamType Type)
     public bool IsBaseReferenceType => (Type & SupportedParamType.String) != 0;
     public bool IsBaseValueType => !IsBaseReferenceType;
 
-    public bool IsReferenceType => (Type & (SupportedParamType.String | SupportedParamType.IsArray)) != 0;
+    public bool IsReferenceType => (Type & (SupportedParamType.String | SupportedParamType.IsList | SupportedParamType.IsDictionary)) != 0;
     public bool IsValueType => !IsReferenceType;
 
     public bool IsNullable => (Type & SupportedParamType.IsNullable) != 0;
     public bool IsBool => (Type & SupportedParamType.Bool) != 0;
-    public bool IsArray => (Type & SupportedParamType.IsArray) != 0;
+    public bool IsList => (Type & SupportedParamType.IsList) != 0;
+    public bool IsDictionary => (Type & SupportedParamType.IsDictionary) != 0;
+    public bool IsCollection => (Type & (SupportedParamType.IsList | SupportedParamType.IsDictionary)) != 0;
     public bool IsEnum => (Type & SupportedParamType.Enum) != 0;
     public bool IsString => (Type & SupportedParamType.String) != 0;
 
@@ -18,9 +20,9 @@ internal readonly record struct ParamType(string Name, SupportedParamType Type)
 
     public override string ToString()
     {
-        if ((Type & SupportedParamType.IsArray) != 0)
+        if ((Type & SupportedParamType.IsList) != 0)
         {
-            return (Type & SupportedParamType.IsNullable) != 0 ? $"{Name}[]?" : $"{Name}[]";
+            return (Type & SupportedParamType.IsNullable) != 0 ? $"IReadOnlyList<{Name}>?" : $"IReadOnlyList<{Name}>";
         }
 
         return (Type & SupportedParamType.IsNullable) != 0 ? $"{Name}?" : Name;

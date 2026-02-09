@@ -1,4 +1,4 @@
 ﻿namespace Bacon.Build;
 
 [AttributeUsage(AttributeTargets.Enum)]
-public class EnumParameterAttribute : Attribute;
+public sealed class EnumParameterAttribute : Attribute;

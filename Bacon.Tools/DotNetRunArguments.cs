@@ -60,5 +60,5 @@ public partial class DotNetRunArguments : DotNetArguments
     public string? ArtifactsPath { get; }
 
     [Parameter("environment")]
-    public string[]? Environments { get; }
+    public IReadOnlyDictionary<string, string>? Environments { get; }
 }

@@ -49,47 +49,57 @@ public class Context
 
     public ITool<string, Result> SearchForCommand(string command, IBuildOutput? defaultBuildOutput = null)
     {
-        string? path = FileSearch.SearchPath(OperatingSystem.IsWindows() ?
-                [$"{command}.exe", $"{command}.dll"] :
-                [command, $"{command}.dll"]);
+        string? path;
 
-        if (path == null)
+        if (OperatingSystem.IsWindows())
         {
-            throw new FileNotFoundException($"Command '{command}' was not found in path.");
+            string? pathExt = Environment.GetEnvironmentVariable("PATHEXT");
+            if (pathExt != null)
+            {
+                var split = (pathExt + ";.DLL").Split(';', StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < split.Length; ++i)
+                {
+                    split[i] = $"{command}{split[i]}";
+                }
+
+                path = FileSearch.SearchPath(split);
+            }
+            else
+            {
+                path = FileSearch.SearchPath([$"{command}.exe", $"{command}.dll"]);
+            }
+        }
+        else
+        {
+            path = FileSearch.SearchPath([command, $"{command}.dll"]);
         }
 
-        return CreateCommand(path, defaultBuildOutput);
+        return path != null ?
+            CreateCommand(path, defaultBuildOutput) :
+            throw new FileNotFoundException($"Command '{command}' was not found in path.");
     }
 
     public ITool<string, Result> SearchForTool(string tool, IBuildOutput? defaultBuildOutput = null)
     {
-        //TODO: The real algo I think is to merge all those while going up ... and maybe roots too ...
-        var path = GetToolsJsonPath();
-
-        if (!path.HasValue)
+        foreach (var path in GetToolsJsonPaths())
         {
-            throw new FileNotFoundException("Could not find tools configuration.", path);
+            var config = JsonSerializer.Deserialize<DotNetToolsJson>(File.ReadAllText(path), JsonSerializerOptions.Web);
+
+            if (config != null &&
+                config.Tools?.TryGetValue(tool.ToLowerInvariant(), out var toolConfig) == true &&
+                toolConfig!.Commands?.TryGetFirstOrDefault(out string? cmd) == true &&
+                !string.IsNullOrWhiteSpace(cmd))
+            {
+                return new ComposedCommandLineTool(new DotNet(this).Tool, $"tool run {cmd} --", defaultBuildOutput);
+            }
+
+            if (config?.IsRoot == true)
+            {
+                break;
+            }
         }
 
-        var config = JsonSerializer.Deserialize<DotNetToolsJson>(File.ReadAllText(path), JsonSerializerOptions.Web);
-
-        if (config == null)
-        {
-            throw new InvalidDataException("Could not deserialize tools configuration.");
-        }
-
-        if (!config.Tools.TryGetValue(tool.ToLowerInvariant(), out var toolConfig))
-        {
-            throw new InvalidOperationException($"Could not find tool {tool}.");
-        }
-
-        string? cmd = toolConfig.Commands.FirstOrDefault();
-        if (cmd == null)
-        {
-            throw new InvalidDataException("Could not find tool command");
-        }
-
-        return new ComposedCommandLineTool(new DotNet(this).Tool, $"tool run {cmd} --", defaultBuildOutput);
+        throw new FileNotFoundException($"Could not find configuration for tool {tool}.");
     }
 
     public ITool<string, Result> CommandFromFullPath(string path, IBuildOutput? defaultBuildOutput = null)
@@ -115,22 +125,27 @@ public class Context
             new CommandLineTool(path, defaultBuildOutput ?? BuildOutput);
     }
 
-    private AbsolutePath? GetToolsJsonPath()
+    private IEnumerable<AbsolutePath> GetToolsJsonPaths()
     {
-        RelativePath toolsJsonPath = OperatingSystem.IsWindows() ? ".config\\dotnet-tools.json" : ".config/dotnet-tools.json";
+        RelativePath configToolsJsonPath = OperatingSystem.IsWindows() ? ".config\\dotnet-tools.json" : ".config/dotnet-tools.json";
+        RelativePath toolsJsonPath = "dotnet-tools.json";
         AbsolutePath? path = RootDirectory;
 
         while (path.HasValue)
         {
-            var fullPath = path.Value / toolsJsonPath;
+            var fullPath = path.Value / configToolsJsonPath;
             if (fullPath.FileExists())
             {
-                return fullPath;
+                yield return fullPath;
+            }
+
+            fullPath = path.Value / toolsJsonPath;
+            if (fullPath.FileExists())
+            {
+                yield return fullPath;
             }
 
             path = path.Value.Parent;
         }
-
-        return null;
     }
 }

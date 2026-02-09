@@ -1,3 +1,3 @@
 ﻿namespace Bacon.Generator;
 
-internal record EnumMemberInfo(string Name, string Value);
+internal sealed record EnumMemberInfo(string Name, string Value);

@@ -29,3 +29,12 @@ public partial class DotNetToolRestoreArguments : DotNetArguments
     [Parameter("verbosity")]
     public DotNetVerbosity? Verbosity { get; }
 }
+
+//TODO: Should we generate those when there are no mandatory parameters?
+public static partial class DotNetToolExtensions
+{
+    public static Result ToolRestore(this DotNet self)
+    {
+        return self.ToolRestore(new DotNetToolRestoreArguments.Builder());
+    }
+}

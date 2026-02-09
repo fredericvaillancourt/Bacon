@@ -6,7 +6,7 @@ namespace Bacon.Tools;
 public partial class OctopusPushArguments : OctopusArguments
 {
     [Parameter("package")]
-    public string[] Packages { get; }
+    public IReadOnlyList<string> Packages { get; }
 
     [Parameter("overwrite-mode")]
     public OctopusPushOverwriteMode? OverwriteMode { get; }

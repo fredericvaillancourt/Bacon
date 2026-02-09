@@ -1,13 +1,8 @@
 ﻿namespace Bacon.Build;
 
-public abstract class Arguments
+public abstract class Arguments(Arguments.Builder builder)
 {
-    protected Arguments(Builder builder)
-    {
-        BuildOutput = builder.BuildOutput;
-    }
-
-    public IBuildOutput? BuildOutput { get; }
+    public IBuildOutput? BuildOutput { get; } = builder.BuildOutput;
 
     public string Format()
     {

@@ -3,7 +3,7 @@
 namespace Bacon.Build;
 
 [System.Diagnostics.DebuggerDisplay("{Name,nq}")]
-public record Target<T>(string Name, IReadOnlyList<Func<T, CancellationToken, Task>> Executes, IReadOnlyList<Target<T>> DependsOn, IReadOnlyList<Target<T>> After, IReadOnlyList<Target<T>> Before, IReadOnlyList<Predicate<T>> OnlyWhen, IReadOnlyList<RequiresInfo<T>> Requires, bool Unlisted) where T : Context
+public sealed record Target<T>(string Name, IReadOnlyList<Func<T, CancellationToken, Task>> Executes, IReadOnlyList<Target<T>> DependsOn, IReadOnlyList<Target<T>> After, IReadOnlyList<Target<T>> Before, IReadOnlyList<Predicate<T>> OnlyWhen, IReadOnlyList<RequiresInfo<T>> Requires, bool Unlisted) where T : Context
 {
     public class Builder(string name)
     {
@@ -43,25 +43,25 @@ public record Target<T>(string Name, IReadOnlyList<Func<T, CancellationToken, Ta
             return this;
         }
 
-        public Builder AddDependsOn(params Target<T>[] targets)
+        public Builder AddDependsOn(params ReadOnlySpan<Target<T>> targets)
         {
             DependsOn.AddRange(targets);
             return this;
         }
 
-        public Builder AddAfter(params Target<T>[] targets)
+        public Builder AddAfter(params ReadOnlySpan<Target<T>> targets)
         {
             After.AddRange(targets);
             return this;
         }
 
-        public Builder AddBefore(params Target<T>[] targets)
+        public Builder AddBefore(params ReadOnlySpan<Target<T>> targets)
         {
             Before.AddRange(targets);
             return this;
         }
 
-        public Builder AddOnlyWhen(params Predicate<T>[] predicate)
+        public Builder AddOnlyWhen(params ReadOnlySpan<Predicate<T>> predicate)
         {
             OnlyWhen.AddRange(predicate);
             return this;

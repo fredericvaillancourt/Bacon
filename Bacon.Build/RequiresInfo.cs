@@ -8,7 +8,7 @@ public abstract class RequiresInfo<T>(string description)
     public abstract ValueTask<bool> EvaluateAsync(T context);
 }
 
-public class RequiresClassContextInfo<T, TReturn>(string description, Func<T, TReturn?> func)
+internal sealed class RequiresClassContextInfo<T, TReturn>(string description, Func<T, TReturn?> func)
     : RequiresInfo<T>(description)
     where TReturn : class
 {
@@ -18,7 +18,7 @@ public class RequiresClassContextInfo<T, TReturn>(string description, Func<T, TR
     }
 }
 
-public class RequiresStructContextInfo<T, TReturn>(string description, Func<T, TReturn?> func)
+internal sealed class RequiresStructContextInfo<T, TReturn>(string description, Func<T, TReturn?> func)
     : RequiresInfo<T>(description)
     where TReturn : struct
 {
@@ -28,7 +28,7 @@ public class RequiresStructContextInfo<T, TReturn>(string description, Func<T, T
     }
 }
 
-public class RequiresStringContextInfo<T>(string description, Func<T, string?> func) : RequiresInfo<T>(description)
+internal sealed class RequiresStringContextInfo<T>(string description, Func<T, string?> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T context)
     {
@@ -36,7 +36,7 @@ public class RequiresStringContextInfo<T>(string description, Func<T, string?> f
     }
 }
 
-public class RequiresBoolContextInfo<T>(string description, Func<T, bool> func) : RequiresInfo<T>(description)
+internal sealed class RequiresBoolContextInfo<T>(string description, Func<T, bool> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T context)
     {
@@ -44,7 +44,7 @@ public class RequiresBoolContextInfo<T>(string description, Func<T, bool> func) 
     }
 }
 
-public class RequiresClassInfo<T, TReturn>(string description, Func<TReturn?> func)
+internal sealed class RequiresClassInfo<T, TReturn>(string description, Func<TReturn?> func)
     : RequiresInfo<T>(description)
     where TReturn : class
 {
@@ -54,7 +54,7 @@ public class RequiresClassInfo<T, TReturn>(string description, Func<TReturn?> fu
     }
 }
 
-public class RequiresStructInfo<T, TReturn>(string description, Func<TReturn?> func)
+internal sealed class RequiresStructInfo<T, TReturn>(string description, Func<TReturn?> func)
     : RequiresInfo<T>(description)
     where TReturn : struct
 {
@@ -64,7 +64,7 @@ public class RequiresStructInfo<T, TReturn>(string description, Func<TReturn?> f
     }
 }
 
-public class RequiresStringInfo<T>(string description, Func<string?> func) : RequiresInfo<T>(description)
+internal sealed class RequiresStringInfo<T>(string description, Func<string?> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T _)
     {
@@ -72,7 +72,7 @@ public class RequiresStringInfo<T>(string description, Func<string?> func) : Req
     }
 }
 
-public class RequiresBoolInfo<T>(string description, Func<bool> func) : RequiresInfo<T>(description)
+internal sealed class RequiresBoolInfo<T>(string description, Func<bool> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T _)
     {
@@ -80,7 +80,7 @@ public class RequiresBoolInfo<T>(string description, Func<bool> func) : Requires
     }
 }
 
-public class RequiresAsyncClassContextInfo<T, TReturn>(string description, Func<T, Task<TReturn?>> func)
+internal sealed class RequiresAsyncClassContextInfo<T, TReturn>(string description, Func<T, Task<TReturn?>> func)
     : RequiresInfo<T>(description)
     where TReturn : class
 {
@@ -90,7 +90,7 @@ public class RequiresAsyncClassContextInfo<T, TReturn>(string description, Func<
     }
 }
 
-public class RequiresAsyncStructContextInfo<T, TReturn>(string description, Func<T, Task<TReturn?>> func)
+internal sealed class RequiresAsyncStructContextInfo<T, TReturn>(string description, Func<T, Task<TReturn?>> func)
     : RequiresInfo<T>(description)
     where TReturn : struct
 {
@@ -100,7 +100,7 @@ public class RequiresAsyncStructContextInfo<T, TReturn>(string description, Func
     }
 }
 
-public class RequiresAsyncStringContextInfo<T>(string description, Func<T, Task<string?>> func) : RequiresInfo<T>(description)
+internal sealed class RequiresAsyncStringContextInfo<T>(string description, Func<T, Task<string?>> func) : RequiresInfo<T>(description)
 {
     public override async ValueTask<bool> EvaluateAsync(T context)
     {
@@ -108,7 +108,7 @@ public class RequiresAsyncStringContextInfo<T>(string description, Func<T, Task<
     }
 }
 
-public class RequiresAsyncBoolContextInfo<T>(string description, Func<T, Task<bool>> func) : RequiresInfo<T>(description)
+internal sealed class RequiresAsyncBoolContextInfo<T>(string description, Func<T, Task<bool>> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T context)
     {
@@ -116,7 +116,7 @@ public class RequiresAsyncBoolContextInfo<T>(string description, Func<T, Task<bo
     }
 }
 
-public class RequiresAsyncClassInfo<T, TReturn>(string description, Func<Task<TReturn?>> func)
+internal sealed class RequiresAsyncClassInfo<T, TReturn>(string description, Func<Task<TReturn?>> func)
     : RequiresInfo<T>(description)
     where TReturn : class
 {
@@ -126,7 +126,7 @@ public class RequiresAsyncClassInfo<T, TReturn>(string description, Func<Task<TR
     }
 }
 
-public class RequiresAsyncStructInfo<T, TReturn>(string description, Func<Task<TReturn?>> func)
+internal sealed class RequiresAsyncStructInfo<T, TReturn>(string description, Func<Task<TReturn?>> func)
     : RequiresInfo<T>(description)
     where TReturn : struct
 {
@@ -136,7 +136,7 @@ public class RequiresAsyncStructInfo<T, TReturn>(string description, Func<Task<T
     }
 }
 
-public class RequiresAsyncStringInfo<T>(string description, Func<Task<string?>> func) : RequiresInfo<T>(description)
+internal sealed class RequiresAsyncStringInfo<T>(string description, Func<Task<string?>> func) : RequiresInfo<T>(description)
 {
     public override async ValueTask<bool> EvaluateAsync(T _)
     {
@@ -144,7 +144,7 @@ public class RequiresAsyncStringInfo<T>(string description, Func<Task<string?>> 
     }
 }
 
-public class RequiresAsyncBoolInfo<T>(string description, Func<Task<bool>> func) : RequiresInfo<T>(description)
+internal sealed class RequiresAsyncBoolInfo<T>(string description, Func<Task<bool>> func) : RequiresInfo<T>(description)
 {
     public override ValueTask<bool> EvaluateAsync(T _)
     {

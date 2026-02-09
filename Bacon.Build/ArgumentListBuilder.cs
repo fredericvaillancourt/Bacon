@@ -1,39 +1,34 @@
-﻿using System.Text;
+﻿using System.Collections;
 
 namespace Bacon.Build;
 
-public class ArgumentListBuilder(string separator = ";")
+public sealed class ArgumentListBuilder(string separator = ";") : IEnumerable<string>
 {
-    private readonly StringBuilder _sb = new();
+    private readonly List<string> _items = new();
 
     public ArgumentListBuilder Add(params string[] values)
     {
-        if (values.Length > 0)
-        {
-            if (_sb.Length > 0)
-            {
-                _sb.Append(separator);
-            }
-
-            _sb.Append(values[0]);
-
-            for (int i = 1; i < values.Length; ++i)
-            {
-                _sb.Append(separator);
-                _sb.Append(values[i]);
-            }
-        }
-
+        _items.AddRange(values);
         return this;
+    }
+
+    public IEnumerator<string> GetEnumerator()
+    {
+        return _items.GetEnumerator();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return ((IEnumerable)_items).GetEnumerator();
     }
 
     public override string ToString()
     {
-        return _sb.ToString();
+        return string.Join(separator, _items);
     }
 
     public static implicit operator string(ArgumentListBuilder builder)
     {
-        return builder._sb.ToString();
+        return builder.ToString();
     }
 }

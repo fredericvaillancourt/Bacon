@@ -1,4 +1,7 @@
 ﻿namespace Bacon.Build;
 
 [AttributeUsage(AttributeTargets.Field)]
-public class EnumNameAttribute(string Name) : Attribute;
+public sealed class EnumNameAttribute(string name) : Attribute
+{
+    public string Name => name;
+}

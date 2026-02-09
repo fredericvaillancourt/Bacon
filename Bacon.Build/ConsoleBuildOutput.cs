@@ -60,13 +60,19 @@ public class ConsoleBuildOutput : IBuildOutput
 
     public void BuildCompleted(TargetResult[] results)
     {
-        Console.WriteLine();
-        Console.WriteLine("Results");
+        int maxNameLength = results.Max(static n => n.Name.Length);
+        string[] durations = results.Select(static r => r.Duration?.ToShortString() ?? string.Empty).ToArray();
+        int maxDurationLength = durations.Max(static n => n.Length);
+        int boxInternalWidth = maxNameLength + maxDurationLength + 5;
+        Console.WriteLine($"╔{new string('═', boxInternalWidth)}╗");
+        Console.WriteLine($"║ Results{new string(' ', boxInternalWidth - 8)}║");
+        Console.WriteLine($"╟─{new string('─', maxNameLength)}─┬─{new string('─', maxDurationLength)}─╢");
 
-        int maxLength = results.Max(static n => n.Name.Length);
-
-        foreach (var result in results)
+        for (int index = 0; index < results.Length; index++)
         {
+            TargetResult result = results[index];
+            string duration = durations[index];
+
             string suffix = "";
             if (TargetResultColors.TryGetValue(result.Status, out var prefix))
             {
@@ -77,15 +83,10 @@ public class ConsoleBuildOutput : IBuildOutput
                 prefix = "";
             }
 
-            if (result.Duration.HasValue)
-            {
-                Console.WriteLine($"{prefix}{result.Name}{suffix}{new string(' ', maxLength - result.Name.Length)} {result.Duration.Value.ToShortString()}");
-            }
-            else
-            {
-                Console.WriteLine($"{prefix}{result.Name}{suffix}");
-            }
+            Console.WriteLine($"║ {prefix}{result.Name}{suffix}{new string(' ', maxNameLength - result.Name.Length)} │ {duration}{new string(' ', maxDurationLength - duration.Length)} ║");
         }
+
+        Console.WriteLine($"╚═{new string('═', maxNameLength)}═╧═{new string('═', maxDurationLength)}═╝");
     }
 
     private void WriteCommand(string tag, string line)

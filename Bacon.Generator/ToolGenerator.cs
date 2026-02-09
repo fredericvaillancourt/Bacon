@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Bacon.Generator;
 
 [Generator]
-public class ToolGenerator : IIncrementalGenerator
+public sealed class ToolGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {

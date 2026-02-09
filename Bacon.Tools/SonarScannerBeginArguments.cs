@@ -6,14 +6,14 @@ namespace Bacon.Tools;
 public partial class SonarScannerBeginArguments : SonarScannerArguments
 {
     [Parameter("key")]
-    public string ProjectKey { get; set; }
+    public string ProjectKey { get; }
 
     [Parameter("name")]
-    public string? Name { get; set; }
+    public string? Name { get; }
 
     [Parameter("version")]
-    public string? Version { get; set; }
+    public string? Version { get; }
 
     [Parameter("d")]
-    public string[]? Sonar { get; set; }
+    public IReadOnlyDictionary<string, string>? Defines { get; }
 }

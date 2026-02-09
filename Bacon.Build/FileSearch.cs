@@ -1,6 +1,6 @@
 ﻿namespace Bacon.Build;
 
-public static class FileSearch
+internal static class FileSearch
 {
     public static string? SearchPath(string fileName)
     {

@@ -1,6 +1,6 @@
 ﻿namespace Bacon.Build;
 
-internal class Node<T>(T data)
+internal sealed class Node<T>(T data)
 {
     private readonly HashSet<Node<T>> _edges = new();
     private int _incomingEdgeCount;

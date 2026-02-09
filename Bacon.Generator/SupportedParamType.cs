@@ -8,5 +8,6 @@ internal enum SupportedParamType
     Bool = 4,
     Numeric = 8,
     IsNullable = 16,
-    IsArray = 32
+    IsList = 32,
+    IsDictionary = 64
 }

@@ -130,6 +130,28 @@ public ref struct ArgumentsBuilder
         }
     }
 
+    public void AutoQuoteAppend(string value)
+    {
+        if (!value.ContainsAnyExcept(SearchChars))
+        {
+            AppendSlow(value);
+            return;
+        }
+
+        Append('"');
+
+        if (!value.Contains('"'))
+        {
+            AppendSlow(value);
+        }
+        else
+        {
+            AppendEscaped(value);
+        }
+
+        Append('"');
+    }
+
     public void SafeAppend(string value)
     {
         if (!value.ContainsAnyExcept(SearchChars))
@@ -138,13 +160,14 @@ public ref struct ArgumentsBuilder
             return;
         }
 
-        //TODO: This is super slow, there are better ways but just getting it to work now.
-        if (value.Contains('"'))
+        if (!value.Contains('"'))
         {
-            value = value.Replace("\"", "\\\"");
+            AppendSlow(value);
         }
-
-        AppendSlow($"\"{value}\"");
+        else
+        {
+            AppendEscaped(value);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -208,6 +231,39 @@ public ref struct ArgumentsBuilder
 
         value.CopyTo(_buffer[pos..]);
         _used = used;
+    }
+
+    private void AppendEscaped(ReadOnlySpan<char> value)
+    {
+        int pos = _used;
+        int used = pos + value.Length + 8; // Can be anything, just some space to start with
+
+        if (used > _buffer.Length)
+        {
+            Grow(used);
+        }
+
+        int extra = _buffer.Length - pos - value.Length;
+
+        foreach (char c in value)
+        {
+            if (c == '"')
+            {
+                if (extra == 0)
+                {
+                    _used = pos;
+                    Grow(_buffer.Length);
+                    extra = _buffer.Length - pos - value.Length;
+                }
+
+                --extra;
+                _buffer[pos++] = '\\';
+            }
+
+            _buffer[pos++] = c;
+        }
+
+        _used = pos;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

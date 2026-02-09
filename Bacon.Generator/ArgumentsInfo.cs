@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Bacon.Generator;
 
-internal record ArgumentsInfo(
+internal sealed record ArgumentsInfo(
     string? Namespace,
     string ClassName,
     string FullClassName,

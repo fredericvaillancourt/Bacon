@@ -1,32 +1,30 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text.Json;
 
 namespace Bacon.Build;
 
-public class Build(
-    IReadOnlyList<Target<Context>> targets,
-    Target<Context>? defaultTarget,
-    IReadOnlyList<Func<Context, Task>>? configureContext = null,
-    IBuildOutput? buildOutput = null)
-    : Build<Context>(targets, defaultTarget, configureContext, buildOutput)
+public sealed class Build<T> where T : Context
 {
-}
-
-public class Build<T> where T : Context, new()
-{
+    private readonly IFactory<T> _contextFactory;
+    private readonly IReadOnlyCollection<IConfigurationSource<T>> _configurationSources;
     private readonly IReadOnlyList<Func<T, Task>>? _configureContext;
     private readonly IBuildOutput _buildOutput;
 
     public IReadOnlyList<Target<T>> Targets { get; }
     public Target<T>? DefaultTarget { get; }
 
-    public Build(
+    private Build(
         IReadOnlyList<Target<T>> targets,
         Target<T>? defaultTarget,
+        IFactory<T> contextFactory,
+        IReadOnlyCollection<IConfigurationSource<T>> configurationSources,
         IReadOnlyList<Func<T, Task>>? configureContext = null,
         IBuildOutput? buildOutput = null)
     {
+        _contextFactory = contextFactory;
+        _configurationSources = configurationSources;
         _configureContext = configureContext;
         _buildOutput = buildOutput ?? (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ENV")) ? ConsoleBuildOutput.Instance : GitHubBuildOutput.Instance);
         Targets = targets;
@@ -40,19 +38,24 @@ public class Build<T> where T : Context, new()
             return Help();
         }
 
-        var context = new T
-        {
-            BuildOutput = _buildOutput
-        };
-        var targetNames = FillContext(context, args);
+        var context = _contextFactory.Create();
+        context.BuildOutput = _buildOutput;
+        context.RootDirectory = Directory.GetCurrentDirectory();
 
-        if (targetNames.Length == 0 && DefaultTarget == null)
+        var buildConfiguration = new BuildConfiguration();
+        var inputs = GetInputs();
+        foreach (var configurationSource in _configurationSources.Reverse())
+        {
+            await configurationSource.ApplyAsync(context, inputs, buildConfiguration);
+        }
+
+        if (buildConfiguration.Targets.Count == 0 && DefaultTarget == null)
         {
             _buildOutput.WriteError("No target to build");
             return 1;
         }
 
-        if (!TryPrepareTargets(targetNames, out var sorted))
+        if (!TryPrepareTargets(buildConfiguration.Targets, out var sorted))
         {
             return 2;
         }
@@ -220,11 +223,11 @@ public class Build<T> where T : Context, new()
         return targets.ToArray();
     }
 
-    private static IEnumerable<(PropertyInfo Property, FromCommandLineAttribute Attribute)> GetParameters()
+    private static IEnumerable<(PropertyInfo Property, InputAttribute Attribute)> GetParameters()
     {
         foreach (PropertyInfo propertyInfo in typeof(T).GetProperties())
         {
-            var attribute = propertyInfo.GetCustomAttribute<FromCommandLineAttribute>();
+            var attribute = propertyInfo.GetCustomAttribute<InputAttribute>();
             if (attribute == null)
             {
                 continue;
@@ -234,13 +237,13 @@ public class Build<T> where T : Context, new()
         }
     }
 
-    private bool TryPrepareTargets(string[] targetNames, [NotNullWhen(true)] out Target<T>[]? sorted)
+    private bool TryPrepareTargets(IReadOnlyList<string> targetNames, [NotNullWhen(true)] out Target<T>[]? sorted)
     {
         var dict = Targets.ToDictionary(static k => k.Name);
 
         var selected = new List<Target<T>>();
 
-        if (targetNames.Length != 0)
+        if (targetNames.Count != 0)
         {
             foreach (string targetName in targetNames)
             {
@@ -358,12 +361,37 @@ public class Build<T> where T : Context, new()
         }
     }
 
+    private static IReadOnlyList<InputInfo> GetInputs()
+    {
+        var inputs = new List<InputInfo>();
+
+        foreach (PropertyInfo propertyInfo in typeof(T).GetProperties())
+        {
+            var attribute = propertyInfo.GetCustomAttribute<InputAttribute>();
+            if (attribute == null)
+            {
+                continue;
+            }
+
+            inputs.Add(new(propertyInfo, attribute, attribute.Name ?? propertyInfo.Name));
+        }
+
+        return inputs;
+    }
+
     public class Builder
     {
         private readonly List<Func<T, Task>> _context = new();
 
         public List<Target<T>> Targets { get; } = new();
         public Target<T>? DefaultTarget { get; set; }
+
+        public List<IConfigurationSource<T>> ConfigurationSources { get; } = new()
+        {
+            new CommandLineConfigurationSource<T>(Environment.GetCommandLineArgs()[1..])
+        };
+
+        public IFactory<T>? ContextFactory { get; set; }
 
         public Builder AddTarget(Target<T> target)
         {
@@ -404,14 +432,71 @@ public class Build<T> where T : Context, new()
             return this;
         }
 
+        public Builder ClearConfigurationSource()
+        {
+            ConfigurationSources.Clear();
+            return this;
+        }
+
+        public Builder AddConfigurationSource(params ReadOnlySpan<IConfigurationSource<T>> sources)
+        {
+            ConfigurationSources.AddRange(sources);
+            return this;
+        }
+
+        public Builder AddCommandLineConfigurationSource(string[] args)
+        {
+            ConfigurationSources.Add(new CommandLineConfigurationSource<T>(args));
+            return this;
+        }
+
+        public Builder AddEnvironmentVariableConfigurationSource()
+        {
+            ConfigurationSources.Add(new EnvironmentVariableConfigurationSource<T>());
+            return this;
+        }
+
+        public Builder AddJsonConfigurationSource(string filename, JsonSerializerOptions? options = null)
+        {
+            ConfigurationSources.Add(new JsonConfigurationSource<T>(filename, options));
+            return this;
+        }
+
+        public Builder SetContextFactory(IFactory<T> contextFactory)
+        {
+            ContextFactory = contextFactory;
+            return this;
+        }
+
         public Build<T> Build()
         {
-            return new Build<T>(Targets.ToArray(), DefaultTarget, _context.ToArray());
+            return new Build<T>(
+                Targets.ToArray(),
+                DefaultTarget,
+                ContextFactory ?? GetContextFactory(),
+                ConfigurationSources.ToArray(),
+                _context.ToArray());
         }
 
         public static implicit operator Build<T>(Builder builder)
         {
             return builder.Build();
+        }
+
+        private static IFactory<T> GetContextFactory()
+        {
+            var type = typeof(T);
+            if (type is { IsAbstract: false, IsClass: true })
+            {
+                var constructor = type.GetConstructor(BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null);
+                if (constructor != null)
+                {
+                    var factoryType = typeof(NewContextFactory<>).MakeGenericType(typeof(T));
+                    return (IFactory<T>)Activator.CreateInstance(factoryType)!;
+                }
+            }
+
+            throw new InvalidOperationException("Missing context factory");
         }
     }
 }

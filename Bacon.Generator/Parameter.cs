@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Bacon.Generator;
 
-internal record Parameter(
+internal sealed record Parameter(
     ParamType Type,
     string Name,
     string? CommandLine)
@@ -19,41 +19,37 @@ internal record Parameter(
             typeToCheck = ((NullableTypeSyntax)type).ElementType;
             t |= SupportedParamType.IsNullable;
         }
-            
-        if (typeToCheck.IsKind(SyntaxKind.ArrayType))
-        {
-            typeToCheck = ((ArrayTypeSyntax)typeToCheck).ElementType;
-            t |= SupportedParamType.IsArray;
 
-            if (typeToCheck.IsKind(SyntaxKind.NullableType))
-            {
-                return null;
-            }
-        }
-
-        //TODO: Should probably check with the semantic type to support Bool ... also all numerics
-        if (typeToCheck is PredefinedTypeSyntax p)
-        {
-            if (p.Keyword.IsKind(SyntaxKind.StringKeyword))
-            {
-                t |= SupportedParamType.String;
-            }
-            else if (p.Keyword.IsKind(SyntaxKind.BoolKeyword))
-            {
-                t |= SupportedParamType.Bool;
-            }
-            else if (p.Keyword.IsKind(SyntaxKind.IntKeyword))
-            {
-                t |= SupportedParamType.Numeric;
-            }
-        }
-        
         var typeToCheckSymbol = semanticModel.GetTypeInfo(typeToCheck);
         var notNullableType = typeToCheckSymbol.Type ?? throw new InvalidOperationException("Missing type");
         if (notNullableType.TypeKind == TypeKind.Enum)
         {
             t |= SupportedParamType.Enum;
         }
+        else if (notNullableType.Name == "IReadOnlyList")
+        {
+            notNullableType = ((INamedTypeSymbol)notNullableType).TypeArguments[0];
+            t |= SupportedParamType.IsList;
+        }
+        else if (notNullableType.Name == "IReadOnlyDictionary")
+        {
+            var namedTypeSymbol = (INamedTypeSymbol)notNullableType;
+            if (namedTypeSymbol.TypeArguments[0].SpecialType != SpecialType.System_String)
+            {
+                return null;
+            }
+
+            notNullableType = namedTypeSymbol.TypeArguments[1];
+            t |= SupportedParamType.IsDictionary;
+        }
+
+        t |= notNullableType.SpecialType switch
+        {
+            SpecialType.System_String => SupportedParamType.String,
+            SpecialType.System_Boolean => SupportedParamType.Bool,
+            SpecialType.System_Int32 => SupportedParamType.Numeric,
+            _ => 0
+        };
 
         return new Parameter(
             new ParamType(notNullableType.ToString(), t),

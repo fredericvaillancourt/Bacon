@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Bacon.Build;
 
-public class CommandLineTool(string fileName, IBuildOutput defaultBuildOutput) : ITool<string, Result>
+public sealed class CommandLineTool(string fileName, IBuildOutput defaultBuildOutput) : ITool<string, Result>
 {
     public Result Execute(string arguments, IBuildOutput? overrideBuildOutput = null)
     {

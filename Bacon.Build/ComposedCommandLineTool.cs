@@ -1,6 +1,6 @@
 ﻿namespace Bacon.Build;
 
-public class ComposedCommandLineTool(ITool<string, Result> tool, string firstArgument, IBuildOutput? buildOutputOverride = null) : ITool<string, Result>
+public sealed class ComposedCommandLineTool(ITool<string, Result> tool, string firstArgument, IBuildOutput? buildOutputOverride = null) : ITool<string, Result>
 {
     public Result Execute(string arguments, IBuildOutput? buildOutput = null)
     {

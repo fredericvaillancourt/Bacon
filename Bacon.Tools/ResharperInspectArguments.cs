@@ -17,5 +17,11 @@ public partial class ResharperInspectArguments : ResharperArguments
     [Parameter("build")]
     public bool BuildTarget { get; }
 
+    [Parameter("dotnetcoresdk")]
+    public string? DotNetCoreSdk { get; }
+
+    [Parameter("exclude")]
+    public IReadOnlyList<string>? Exclude { get; }
+
     public string Target { get; }
 }
