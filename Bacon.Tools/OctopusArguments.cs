@@ -2,8 +2,8 @@
 
 namespace Bacon.Tools;
 
-[Syntax("")]
 [Tool("Octopus.DotNet.Cli", ToolLocation.Tool)]
+[Syntax("{args}")]
 public abstract partial class OctopusArguments : Arguments
 {
     [Parameter("logLevel")]

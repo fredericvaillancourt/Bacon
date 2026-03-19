@@ -3,7 +3,7 @@
 namespace Bacon.Tools;
 
 [Tool("gitversion.tool", ToolLocation.Tool, typeof(NoOutputBuildOutput))]
-[Syntax("")]
+[Syntax("{args}")]
 public partial class GitVersionArguments : Arguments
 {
     public string? Path { get; }

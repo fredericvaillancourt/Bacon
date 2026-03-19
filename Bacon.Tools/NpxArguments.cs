@@ -3,7 +3,7 @@
 namespace Bacon.Tools;
 
 [Tool("npx")]
-[Syntax("")]
+[Syntax("{args}")]
 public abstract partial class NpxArguments : Arguments
 {
     [Parameter("yes")]

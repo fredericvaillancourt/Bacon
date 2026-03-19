@@ -5,7 +5,7 @@
     <Authors>Frédéric Vaillancourt</Authors>
     <Company></Company>
     <Description>Build automation library</Description>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/fredericvaillancourt/Bacon</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
