@@ -16,7 +16,7 @@ public class ConsoleBuildOutput : IBuildOutput
 
     public static ConsoleBuildOutput Instance { get; } = new();
 
-    protected ConsoleBuildOutput(TimeProvider? timeProvider = null)
+    public ConsoleBuildOutput(TimeProvider? timeProvider = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -35,17 +35,17 @@ public class ConsoleBuildOutput : IBuildOutput
 
     public void WriteInformation(string line)
     {
-        Console.WriteLine(line);
+        WriteCommand("Info", line);
     }
 
     public void WriteWarning(string line)
     {
-        Console.WriteLine($"\e[93m{line}\e[0m");
+        WriteCommand("\e[93mWarning\e[0m", line);
     }
 
     public void WriteError(string line)
     {
-        Console.WriteLine($"\e[31m{line}\e[0m");
+        WriteCommand("\e[31mError\e[0m", line);
     }
 
     public void WriteCommandOutput(string line)

@@ -4,22 +4,7 @@ public abstract class Arguments(Arguments.Builder builder)
 {
     public IBuildOutput? BuildOutput { get; } = builder.BuildOutput;
 
-    public string Format()
-    {
-        Span<char> buffer = stackalloc char[256]; //TODO: Should this be 128?
-        var builder = new ArgumentsBuilder(buffer);
-        try
-        {
-            DoFormat(ref builder);
-            return builder.ToString();
-        }
-        finally
-        {
-            builder.Dispose();
-        }
-    }
-
-    protected abstract void DoFormat(ref ArgumentsBuilder builder);
+    public abstract void AppendToStringHandler(ref ArgumentsStringHandler arguments);
 
     public abstract class Builder
     {

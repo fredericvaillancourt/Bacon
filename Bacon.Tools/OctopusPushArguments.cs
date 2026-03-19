@@ -20,7 +20,7 @@ public partial class OctopusPushArguments : OctopusArguments
     [Parameter("server")]
     public string? Server { get; }
 
-    [Parameter("apiKey")]
+    [Parameter("apiKey", true)]
     public string? ApiKey { get; }
 
     [Parameter("user")]

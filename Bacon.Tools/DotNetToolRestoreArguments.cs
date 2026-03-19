@@ -2,8 +2,8 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} tool restore {args}")]
-public partial class DotNetToolRestoreArguments : DotNetArguments
+[Syntax("{base} restore {args}")]
+public partial class DotNetToolRestoreArguments : DotNetToolArguments
 {
     [Parameter("configFile")]
     public string? ConfigFile { get; }
@@ -28,13 +28,4 @@ public partial class DotNetToolRestoreArguments : DotNetArguments
 
     [Parameter("verbosity")]
     public DotNetVerbosity? Verbosity { get; }
-}
-
-//TODO: Should we generate those when there are no mandatory parameters?
-public static partial class DotNetToolExtensions
-{
-    public static Result ToolRestore(this DotNet self)
-    {
-        return self.ToolRestore(new DotNetToolRestoreArguments.Builder());
-    }
 }

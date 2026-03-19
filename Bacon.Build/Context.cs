@@ -47,7 +47,7 @@ public class Context
         return false;
     }
 
-    public ITool<string, Result> SearchForCommand(string command, IBuildOutput? defaultBuildOutput = null)
+    public CommandLineTool SearchForCommand(string command, IBuildOutput? defaultBuildOutput = null)
     {
         string? path;
 
@@ -79,7 +79,7 @@ public class Context
             throw new FileNotFoundException($"Command '{command}' was not found in path.");
     }
 
-    public ITool<string, Result> SearchForTool(string tool, IBuildOutput? defaultBuildOutput = null)
+    public CommandLineTool SearchForTool(string tool, IBuildOutput? defaultBuildOutput = null)
     {
         foreach (var path in GetToolsJsonPaths())
         {
@@ -90,7 +90,8 @@ public class Context
                 toolConfig!.Commands?.TryGetFirstOrDefault(out string? cmd) == true &&
                 !string.IsNullOrWhiteSpace(cmd))
             {
-                return new ComposedCommandLineTool(new DotNet(this).Tool, $"tool run {cmd} --", defaultBuildOutput);
+                var dotNetTool = new DotNet(this).Tool;
+                return new CommandLineTool(dotNetTool.FileName, defaultBuildOutput ?? dotNetTool.DefaultBuildOutput, $"tool run {cmd} --");
             }
 
             if (config?.IsRoot == true)
@@ -102,7 +103,7 @@ public class Context
         throw new FileNotFoundException($"Could not find configuration for tool {tool}.");
     }
 
-    public ITool<string, Result> CommandFromFullPath(string path, IBuildOutput? defaultBuildOutput = null)
+    public CommandLineTool CommandFromFullPath(string path, IBuildOutput? defaultBuildOutput = null)
     {
         if (!Path.IsPathFullyQualified(path))
         {
@@ -117,12 +118,17 @@ public class Context
         return CreateCommand(path, defaultBuildOutput);
     }
 
-    private ITool<string, Result> CreateCommand(string path, IBuildOutput? defaultBuildOutput)
+    private CommandLineTool CreateCommand(string path, IBuildOutput? defaultBuildOutput)
     {
-        return path.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) ?
-            // "fullPathTo/dotnet.exe theApp.dll --" so that anything after are theApp.dll arguments and not dotnet.exe
-            new ComposedCommandLineTool(new DotNet(this).Tool, $"{path} --", defaultBuildOutput) :
-            new CommandLineTool(path, defaultBuildOutput ?? BuildOutput);
+        if (!path.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase))
+        {
+            return new CommandLineTool(path, defaultBuildOutput ?? BuildOutput);
+        }
+
+        // "fullPathTo/dotnet.exe theApp.dll --" so that anything after are theApp.dll arguments and not dotnet.exe
+        var dotNetTool = new DotNet(this).Tool;
+        return new CommandLineTool(dotNetTool.FileName, defaultBuildOutput ?? dotNetTool.DefaultBuildOutput, $"{path} --");
+
     }
 
     private IEnumerable<AbsolutePath> GetToolsJsonPaths()

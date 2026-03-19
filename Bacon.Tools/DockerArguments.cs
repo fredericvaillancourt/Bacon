@@ -3,7 +3,7 @@
 namespace Bacon.Tools;
 
 [Tool("docker")]
-[Syntax("{args}")]
+[Syntax("")]
 public abstract partial class DockerArguments : Arguments
 {
 }

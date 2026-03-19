@@ -1,73 +1,26 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-
-namespace Bacon.Generator;
+﻿namespace Bacon.Generator;
 
 internal sealed record ArgumentsInfo(
-    string? Namespace,
-    string ClassName,
-    string FullClassName,
-    string? ParentFullClassName,
-    bool IsAbstract,
+    ClassInfo ClassInfo,
+    ClassInfo? ParentClassInfo,
+    EquatableArray<Parameter> AllParentParameters,
     string Syntax,
     string ToolName,
-    string ActionName,
-    EquatableArray<Parameter> Parameters)
+    string ActionName)
 {
-    public IEnumerable<Parameter> BaseParameters
+    public static ArgumentsInfo From(ArgumentsPreInfoGrouping group)
     {
-        get
-        {
-            var parent = Base;
-            while (parent != null)
-            {
-                for (int i = 0; i < parent.Parameters.Length; ++i)
-                {
-                    yield return parent.Parameters[i];
-                }
-
-                parent = parent.Base;
-            }
-        }
+        var pre = group.ArgumentsPreInfo;
+        return new(
+            group.ClassInfo,
+            group.Base?.ClassInfo,
+            group.BaseParameters,
+            pre.Syntax,
+            pre.ToolName,
+            pre.ActionName);
     }
 
-    public ArgumentsInfo? Base { get; set; }
+    public bool HasRequiredParameters => ClassInfo.Parameters.Any(IsRequired) || AllParentParameters.Any(IsRequired);
 
-    public bool IsRoot => Base == null;
-
-    public static ArgumentsInfo From(
-        ClassDeclarationSyntax argumentsClassSyntax,
-        INamedTypeSymbol argumentsClassSymbol,
-        INamedTypeSymbol topClassSymbol,
-        EquatableArray<Parameter> parameters,
-        string syntax)
-    {
-        string className = argumentsClassSyntax.Identifier.ValueText;
-        string toolName = RemoveArguments(topClassSymbol.Name);
-        string actionName = GetActionName(className, toolName);
-
-        return new ArgumentsInfo(
-            argumentsClassSymbol.ContainingNamespace.ToStringOrNull(),
-            className,
-            argumentsClassSymbol.ToDisplayString(),
-            !SymbolEqualityComparer.Default.Equals(argumentsClassSymbol, topClassSymbol) ?
-                argumentsClassSymbol.BaseType?.ToDisplayString() :
-                null,
-            argumentsClassSymbol.IsAbstract,
-            syntax,
-            toolName,
-            actionName,
-            parameters);
-    }
-
-    private static string RemoveArguments(string s)
-    {
-        return s.EndsWith("Arguments") ? s[..^9] : s;
-    }
-
-    private static string GetActionName(string s, string toolName)
-    {
-        string actionName = s.StartsWith(toolName) && s.EndsWith("Arguments") ? s[(toolName.Length)..^9] : s;
-        return actionName.Length > 0 ? actionName : "Execute";
-    }
+    private static bool IsRequired(Parameter parameter) => parameter.Type is { IsNullable: false, IsBool: false };
 }

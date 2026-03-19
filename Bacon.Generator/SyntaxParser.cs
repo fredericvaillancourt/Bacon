@@ -119,9 +119,9 @@ internal static class SyntaxParser
             goto Error;
         }
 
-        if (startIndex < i - 1)
+        if (startIndex < i)
         {
-            result.Add(new SyntaxToken(SyntaxTokenType.Literal, SyntaxQuoteStyle.Automatic, '\0', value[startIndex..(i - 1)]));
+            result.Add(new SyntaxToken(SyntaxTokenType.Literal, SyntaxQuoteStyle.Automatic, '\0', value[startIndex..i]));
         }
 
         parsed = result;

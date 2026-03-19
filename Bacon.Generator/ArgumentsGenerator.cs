@@ -1,4 +1,6 @@
 ﻿using System.CodeDom.Compiler;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -8,7 +10,7 @@ namespace Bacon.Generator;
 [Generator]
 public sealed class ArgumentsGenerator : IIncrementalGenerator
 {
-    private static readonly Parameter BuildOutput = new(new ParamType("Bacon.Build.IBuildOutput", SupportedParamType.IsNullable), "BuildOutput", null);
+    private static readonly Parameter BuildOutput = new(new ParamType("Bacon.Build.IBuildOutput", SupportedParamType.IsNullable), "BuildOutput", null, false, null);
     private static readonly SyntaxToken[] DefaultTokensWithBase =
     [
         new(SyntaxTokenType.Base, SyntaxQuoteStyle.Automatic, '\0', null),
@@ -21,8 +23,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         new(SyntaxTokenType.Args, SyntaxQuoteStyle.Automatic, ' ', "--")
     ];
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
-    {
+    public void Initialize(IncrementalGeneratorInitializationContext context){
         var syntaxProvider = context.SyntaxProvider.ForAttributeWithMetadataName(
             "Bacon.Build.SyntaxAttribute",
             static (_, _) => true,
@@ -67,77 +68,87 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
                     .Members
                     .OfType<PropertyDeclarationSyntax>()
                     .Where(static p => p.Modifiers.Any(static m => m.IsKind(SyntaxKind.PublicKeyword)))
-                    .Select(p => Parameter.From(
-                        syntaxContext.SemanticModel,
-                        p.Type,
-                        p.Identifier.ValueText,
-                        GetParameterName(p.AttributeLists, syntaxContext.SemanticModel, cancellationToken)))
+                    .Select(p =>
+                    {
+                        var arguments = GetParameterArguments(p.AttributeLists, syntaxContext.SemanticModel, cancellationToken);
+                        return Parameter.From(
+                                syntaxContext.SemanticModel,
+                                p.Type,
+                                p.Identifier.ValueText,
+                                arguments.CommandLine,
+                                arguments.IsSecret,
+                                arguments.Join);
+                    })
                     .Where(static p => p != null)
                     .Select<Parameter?, Parameter>(static p => p!)
                     .ToArray();
 
-                return ArgumentsInfo.From(argumentsClass, argumentsType, lastBeforeArguments!, parameters, syntax);
-            }).Where(static s => s != null).Select<ArgumentsInfo?, ArgumentsInfo>(static (s, _) => s!).Collect();
+                return ArgumentsPreInfo.From(argumentsClass, argumentsType, lastBeforeArguments!, parameters, syntax);
+            }).NotNull().Collect();
 
-        context.RegisterSourceOutput(syntaxProvider, static (productionContext, node) =>
+        var transformed = syntaxProvider.SelectMany<ImmutableArray<ArgumentsPreInfo>, ArgumentsInfo>(static (node, ct) =>
         {
-            var dic = node.ToDictionary(static k => k.FullClassName);
-            foreach (ArgumentsInfo argumentsInfo in node)
+            var dic = node.ToDictionary(static k => k.FullClassName, static v => new ArgumentsPreInfoGrouping(v));
+            foreach (var grouping in dic.Values)
             {
-                if (argumentsInfo.ParentFullClassName != null && dic.TryGetValue(argumentsInfo.ParentFullClassName, out var parent))
+                var argumentsInfo = grouping.ArgumentsPreInfo;
+                if (argumentsInfo.ParentFullClassName != null &&
+                    dic.TryGetValue(argumentsInfo.ParentFullClassName, out var parent))
                 {
-                    argumentsInfo.Base = parent;
+                    grouping.Base = parent;
                 }
             }
 
-            foreach (var info in node)
+            return dic.Values.Select(static m => ArgumentsInfo.From(m));
+        });
+
+        context.RegisterSourceOutput(transformed, static (productionContext, info) =>
+        {
+            using var writer = new StringWriter();
+            using var iw = new IndentedTextWriter(writer, "    ");
+
+            iw.WriteHeader();
+            iw.WriteNamespace(info.ClassInfo.Namespace);
+
+            if (!info.ClassInfo.IsAbstract)
             {
-                using var writer = new StringWriter();
-                using var iw = new IndentedTextWriter(writer, "    ");
-
-                iw.WriteHeader();
-                iw.WriteNamespace(info.Namespace);
-
-                if (!info.IsAbstract)
-                {
-                    GenerateArgumentToolMethods(iw, info);
-                }
-
-                iw.WriteLine($"public {(info.IsAbstract ? "abstract " : "")}partial class {info.ClassName}");
-                iw.OpenBracket();
-
-                GenerateConstructor(iw, info);
-                iw.WriteLine();
-
-                GenerateDoFormat(iw, info);
-                iw.WriteLine();
-
-                if (!info.IsAbstract)
-                {
-                    GenerateImplicitCasts(iw, info);
-                }
-
-                GenerateBuilder(iw, info);
-                iw.CloseBracket();
-
-                productionContext.AddSource($"{info.ClassName}.g.cs", writer.ToString());
+                GenerateArgumentToolMethods(iw, info);
             }
+
+            iw.WriteLine($"public {(info.ClassInfo.IsAbstract ? "abstract " : "")}partial class {info.ClassInfo.ClassName}");
+            iw.OpenBracket();
+
+            GenerateConstructor(iw, info);
+            iw.WriteLine();
+
+            GenerateFormat(iw, info);
+            iw.WriteLine();
+
+            if (!info.ClassInfo.IsAbstract)
+            {
+                GenerateImplicitCasts(iw, info);
+            }
+
+            GenerateBuilder(iw, info);
+            iw.CloseBracket();
+
+            productionContext.AddSource($"{info.ClassInfo.ClassName}.g.cs", writer.ToString());
         });
     }
 
     private static void GenerateBuilder(IndentedTextWriter iw, ArgumentsInfo info)
     {
-        string baseClass = !info.IsRoot ? $" : {info.Base?.ClassName}.Builder" : " : Bacon.Build.Arguments.Builder";
-        if (!info.IsAbstract)
+        string baseClass = info.ParentClassInfo != null ? $" : {info.ParentClassInfo.ClassName}.Builder" : " : Bacon.Build.Arguments.Builder";
+        if (!info.ClassInfo.IsAbstract)
         {
-            baseClass += $", Bacon.Build.IArgumentsBuilder<Builder, {info.ClassName}>";
+            baseClass += $", Bacon.Build.IArgumentsBuilder<Builder, {info.ClassInfo.ClassName}>";
         }
 
-        iw.WriteLine($"public new {(info.IsAbstract ? "abstract " : "")}partial class Builder{baseClass}");
+        iw.WriteLine($"public new {(info.ClassInfo.IsAbstract ? "abstract " : "")}partial class Builder{baseClass}");
         iw.OpenBracket();
-        iw.WriteLine($"{(info.IsAbstract ? "protected" : "public")} Builder()");
+        iw.WriteLine($"{(info.ClassInfo.IsAbstract ? "protected" : "public")} Builder()");
         iw.OpenBracket();
-        foreach (var parameter in info.Parameters)
+        foreach (var parameter in info.ClassInfo.Parameters)
         {
             if (parameter.Type.IsCollection)
             {
@@ -148,8 +159,8 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         iw.CloseBracket();
         iw.WriteLine();
 
-        iw.WriteLine($"{(info.IsAbstract ? "protected" : "public")} Builder({info.ClassName} value)");
-        if (info.Base != null)
+        iw.WriteLine($"{(info.ClassInfo.IsAbstract ? "protected" : "public")} Builder({info.ClassInfo.ClassName} value)");
+        if (info.ParentClassInfo != null)
         {
             ++iw.Indent;
             iw.WriteLine(": base(value)");
@@ -158,7 +169,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
 
         iw.OpenBracket();
 
-        foreach (var parameter in info.Parameters)
+        foreach (var parameter in info.ClassInfo.Parameters)
         {
             string extra = "";
             if (parameter.Type.IsList)
@@ -180,13 +191,13 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         iw.CloseBracket();
         iw.WriteLine();
 
-        if (!info.IsAbstract)
+        if (!info.ClassInfo.IsAbstract)
         {
-            iw.WriteLine($"Builder Bacon.Build.IArgumentsBuilder<Builder, {info.ClassName}>.Clone()");
+            iw.WriteLine($"Builder Bacon.Build.IArgumentsBuilder<Builder, {info.ClassInfo.ClassName}>.Clone()");
             iw.OpenBracket();
             iw.WriteLine("var builder = new Builder();");
 
-            foreach (var parameter in info.Parameters)
+            foreach (var parameter in info.ClassInfo.Parameters)
             {
                 if (parameter.Type.IsList)
                 {
@@ -206,24 +217,24 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
             iw.CloseBracket();
         }
 
-        foreach (var parameter in info.Parameters)
+        foreach (var parameter in info.ClassInfo.Parameters)
         {
             GenerateBuilderParameter(iw, parameter, false);
         }
 
-        foreach (var parameter in info.BaseParameters)
+        foreach (var parameter in info.AllParentParameters)
         {
             GenerateBuilderParameter(iw, parameter, true);
         }
 
         GenerateBuilderParameter(iw, BuildOutput, true);
 
-        if (!info.IsAbstract)
+        if (!info.ClassInfo.IsAbstract)
         {
-            iw.WriteLine($"public {(info.Base?.IsAbstract == false ? "new " : "")}{info.ClassName} Build()");
+            iw.WriteLine($"public {(info.ParentClassInfo?.IsAbstract == false ? "new " : "")}{info.ClassInfo.ClassName} Build()");
             iw.OpenBracket();
 
-            foreach (Parameter parameter in info.Parameters)
+            foreach (Parameter parameter in info.ClassInfo.Parameters)
             {
                 if (parameter.Type.IsNullable || parameter.Type.IsBool)
                 {
@@ -239,7 +250,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
                 iw.CloseBracket();
             }
 
-            iw.WriteLine($"return new {info.ClassName}(this);");
+            iw.WriteLine($"return new {info.ClassInfo.ClassName}(this);");
             iw.CloseBracket();
         }
 
@@ -248,12 +259,12 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
 
     private static void GenerateImplicitCasts(IndentedTextWriter iw, ArgumentsInfo info)
     {
-        iw.WriteLine($"public static implicit operator {info.ClassName}(Builder builder)");
+        iw.WriteLine($"public static implicit operator {info.ClassInfo.ClassName}(Builder builder)");
         iw.OpenBracket();
         iw.WriteLine("return builder.Build();");
         iw.CloseBracket();
         iw.WriteLine();
-        iw.WriteLine($"public static implicit operator Builder({info.ClassName} arguments)");
+        iw.WriteLine($"public static implicit operator Builder({info.ClassInfo.ClassName} arguments)");
         iw.OpenBracket();
         iw.WriteLine("return new Builder(arguments);");
         iw.CloseBracket();
@@ -262,7 +273,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
 
     private static void GenerateConstructor(IndentedTextWriter iw, ArgumentsInfo info)
     {
-        iw.WriteLine($"protected {info.ClassName}(Builder builder)");
+        iw.WriteLine($"protected {info.ClassInfo.ClassName}(Builder builder)");
 
         ++iw.Indent;
         iw.WriteLine(": base(builder)");
@@ -270,7 +281,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
 
         iw.OpenBracket();
 
-        foreach (var parameter in info.Parameters)
+        foreach (var parameter in info.ClassInfo.Parameters)
         {
             string extra = "";
             if (parameter.Type.IsList)
@@ -281,9 +292,9 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
             {
                 extra = parameter.Type.IsNullable ? $".Count > 0 ? builder.{parameter.Name}.ToDictionary() : null" : ".ToDictionary()";
             }
-            else if (parameter.Type is { IsNullable: false, IsBool: false, IsValueType: false })
+            else if (parameter.Type is { IsNullable: false, IsBool: false })
             {
-                extra = "!";
+                extra = parameter.Type.IsValueType ? "!.Value" : "!";
             }
 
             iw.WriteLine($"{parameter.Name} = builder.{parameter.Name}{extra};");
@@ -297,38 +308,50 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         string name = info.ToolName != "DotNet" ? info.ToolName : "Bacon.Build.DotNet";
         iw.WriteLine($"public static partial class {info.ToolName}ToolExtensions");
         iw.OpenBracket();
-        iw.WriteLine($"public static Bacon.Build.Result {info.ActionName}(this {name} self, Func<{info.ClassName}.Builder, {info.ClassName}> configure)");
+        iw.WriteLine($"public static Bacon.Build.Result {info.ActionName}(this {name} self, Func<{info.ClassInfo.ClassName}.Builder, {info.ClassInfo.ClassName}> configure)");
         iw.OpenBracket();
-        iw.WriteLine($"return self.{info.ActionName}(configure(new {info.ClassName}.Builder()));");
+        iw.WriteLine($"return self.{info.ActionName}(configure(new {info.ClassInfo.ClassName}.Builder()));");
         iw.CloseBracket();
         iw.WriteLine();
-        iw.WriteLine($"public static Bacon.Build.Result {info.ActionName}(this {name} self, {info.ClassName} arguments)");
+        iw.WriteLine($"public static Bacon.Build.Result {info.ActionName}(this {name} self, {info.ClassInfo.ClassName} arguments)");
         iw.OpenBracket();
-        iw.WriteLine("return self.Tool.Execute(arguments.Format(), arguments.BuildOutput);");
+        iw.WriteLine("var handler = new Bacon.Build.ArgumentsStringHandler();");
+        iw.WriteLine("arguments.AppendToStringHandler(ref handler);");
+        iw.WriteLine("return self.Tool.Execute(ref handler, arguments.BuildOutput);");
         iw.CloseBracket();
         iw.WriteLine();
-        iw.WriteLine($"public static Bacon.Build.Result[] {info.ActionName}(this {name} self, Func<{info.ClassName}.Builder, System.Collections.Generic.IEnumerable<{info.ClassName}>> configure)");
+        iw.WriteLine($"public static Bacon.Build.Result[] {info.ActionName}(this {name} self, Func<{info.ClassInfo.ClassName}.Builder, System.Collections.Generic.IEnumerable<{info.ClassInfo.ClassName}>> configure)");
         iw.OpenBracket();
         iw.WriteLine($"var results = new System.Collections.Generic.List<Bacon.Build.Result>();");
-        iw.WriteLine($"foreach (var arguments in configure(new {info.ClassName}.Builder()))");
+        iw.WriteLine($"foreach (var arguments in configure(new {info.ClassInfo.ClassName}.Builder()))");
         iw.OpenBracket();
         iw.WriteLine($"results.Add(self.{info.ActionName}(arguments));");
         iw.CloseBracket();
         iw.WriteLine();
         iw.WriteLine("return results.ToArray();");
         iw.CloseBracket();
+
+        if (!info.HasRequiredParameters)
+        {
+            iw.WriteLine();
+            iw.WriteLine($"public static Bacon.Build.Result {info.ActionName}(this {name} self)");
+            iw.OpenBracket();
+            iw.WriteLine($"return self.{info.ActionName}(new {info.ClassInfo.ClassName}.Builder());");
+            iw.CloseBracket();
+        }
+
         iw.CloseBracket();
         iw.WriteLine();
     }
 
-    private static void GenerateDoFormat(IndentedTextWriter iw, ArgumentsInfo info)
+    private static void GenerateFormat(IndentedTextWriter iw, ArgumentsInfo info)
     {
-        iw.WriteLine("protected override void DoFormat(ref Bacon.Build.ArgumentsBuilder builder)");
+        iw.WriteLine("public override void AppendToStringHandler(ref Bacon.Build.ArgumentsStringHandler arguments)");
         iw.OpenBracket();
 
         if (!SyntaxParser.TryParse(info.Syntax, out var parsed))
         {
-            parsed = info.Base != null ? DefaultTokensWithBase : DefaultTokensWithoutBase;
+            parsed = info.ParentClassInfo != null ? DefaultTokensWithBase : DefaultTokensWithoutBase;
         }
 
         foreach (SyntaxToken syntaxToken in parsed)
@@ -336,14 +359,14 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
             switch (syntaxToken.Type)
             {
                 case SyntaxTokenType.Literal:
-                    iw.WriteLine("builder.AddSpaceIfRequired();");
-                    iw.WriteLine($"builder.Append({SymbolDisplay.FormatLiteral(syntaxToken.Value!.Trim(), true)});");
+                    iw.WriteLine("arguments.AddSpaceIfRequired();");
+                    iw.WriteLine($"arguments.AppendLiteral({SymbolDisplay.FormatLiteral(syntaxToken.Value!.Trim(), true)});");
                     break;
                 case SyntaxTokenType.Base:
-                    iw.WriteLine("base.DoFormat(ref builder);");
+                    iw.WriteLine("base.AppendToStringHandler(ref arguments);");
                     break;
                 case SyntaxTokenType.Args:
-                    foreach (var parameter in info.Parameters)
+                    foreach (var parameter in info.ClassInfo.Parameters)
                     {
                         if (parameter.Type.IsBool)
                         {
@@ -352,11 +375,18 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
                             iw.OpenBracket();
                             if (parameter.Type.IsNullable)
                             {
-                                iw.WriteLine($"builder.Append($\" {(syntaxToken.QuoteStyle == SyntaxQuoteStyle.Whole ? "\\\"" : "")}{syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine!, false)}{syntaxToken.Separator}{(syntaxToken.QuoteStyle == SyntaxQuoteStyle.Value ? "\\\"" : "")}{{{parameter.Name}.Value}}{(syntaxToken.QuoteStyle != SyntaxQuoteStyle.Automatic ? "\\\"" : "")}\");");
+                                string sep0 = syntaxToken.QuoteStyle == SyntaxQuoteStyle.Whole ? "\\\"" : "";
+                                string sep1 = syntaxToken.QuoteStyle == SyntaxQuoteStyle.Value ? "\\\"" : "";
+                                iw.WriteLine($"arguments.AppendLiteral(\" {sep0}{syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine!, false)}{syntaxToken.Separator}{sep1}\");");
+                                iw.WriteLine($"arguments.AppendFormatted({parameter.Name}.Value{(parameter.IsSecret ? ", \"?\"" : "")});");
+                                if (syntaxToken.QuoteStyle != SyntaxQuoteStyle.Automatic)
+                                {
+                                    iw.WriteLine("arguments.AppendLiteral('\"');");
+                                }
                             }
                             else
                             {
-                                iw.WriteLine($"builder.Append(\" {syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine!, false)}\");");
+                                iw.WriteLine($"arguments.AppendLiteral(\" {syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine!, false)}\");");
                             }
 
                             iw.CloseBracket();
@@ -365,7 +395,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
                         {
                             if (parameter.Type.IsNullable)
                             {
-                                iw.WriteLine(parameter.Type.IsValueType ?
+                                iw.WriteLine(parameter.Type.IsValueType && !parameter.Type.IsCollection ?
                                     $"if ({parameter.Name}.HasValue)" :
                                     $"if ({parameter.Name} != null)");
                                 iw.OpenBracket();
@@ -374,55 +404,97 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
                             string appendCommandLine;
                             if (parameter.CommandLine != null)
                             {
-                                appendCommandLine = $"builder.Append(\" {(syntaxToken.QuoteStyle == SyntaxQuoteStyle.Whole ? "\\\"" : "")}{syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine, false)}{syntaxToken.Separator}{(syntaxToken.QuoteStyle == SyntaxQuoteStyle.Value ? "\\\"" : "")}\");";
+                                string sep0 = syntaxToken.QuoteStyle == SyntaxQuoteStyle.Whole ? "\\\"" : "";
+                                string sep1 = syntaxToken.QuoteStyle == SyntaxQuoteStyle.Value ? "\\\"" : "";
+                                appendCommandLine = $"arguments.AppendLiteral(\" {sep0}{syntaxToken.Value}{SymbolDisplay.FormatLiteral(parameter.CommandLine, false)}{syntaxToken.Separator}{sep1}\");";
                             }
                             else
                             {
-                                appendCommandLine = $"builder.Append(' ');";
+                                appendCommandLine = syntaxToken.QuoteStyle == SyntaxQuoteStyle.Automatic ?
+                                    "arguments.AppendLiteral(' ');" :
+                                    "arguments.AppendLiteral(\" \\\"\");";
                             }
 
                             string extraCalls = "";
                             if (parameter.Type.IsEnum)
                             {
-                                extraCalls = parameter.Type is { IsNullable: true, IsList: false } ? ".Value.ToValueString()" : ".ToValueString()";
+                                extraCalls = parameter.Type is { IsNullable: true, IsCollection: false } ? ".Value.ToValueString()" : ".ToValueString()";
                             }
-                            else if (parameter.Type is { IsNullable: true, IsValueType: true })
+                            else if (parameter.Type is { IsNullable: true, IsValueType: true, IsCollection: false })
                             {
                                 extraCalls = ".Value";
                             }
 
+                            if (syntaxToken.QuoteStyle != SyntaxQuoteStyle.Automatic)
+                            {
+                                extraCalls += parameter.IsSecret ? ", \"?\\\"\"" : ", \"\\\"\"";
+                            }
+                            else if (parameter.IsSecret)
+                            {
+                                extraCalls += ", \"?\"";
+                            }
+
                             if (parameter.Type.IsList)
                             {
-                                string prefix = parameter.Type.IsString ? "Safe" : "";
-                                iw.WriteLine($"for (int i = 0; i < {parameter.Name}.Count; ++i)");
-                                iw.OpenBracket();
-                                AppendOneParameter(iw, appendCommandLine, parameter.Name, prefix, $"[i]{extraCalls}");
-                                iw.CloseBracket();
+                                if (parameter.Join == null)
+                                {
+                                    iw.WriteLine($"for (int i = 0; i < {parameter.Name}.Count; ++i)");
+                                    iw.OpenBracket();
+                                    iw.WriteLine(appendCommandLine);
+                                    iw.WriteLine($"arguments.AppendFormatted({parameter.Name}[i]{extraCalls});");
+                                    WriteQuote2(iw, syntaxToken);
+                                    iw.CloseBracket();
+                                }
+                                else
+                                {
+                                    iw.WriteLine(appendCommandLine);
+                                    iw.WriteLine($"for (int i = 0; i < {parameter.Name}.Count; ++i)");
+                                    iw.OpenBracket();
+                                    iw.WriteLine("if (i > 0)");
+                                    iw.OpenBracket();
+                                    iw.WriteLine($"arguments.AppendLiteral({JoinToParam(parameter.Join)});");
+                                    iw.CloseBracket();
+                                    iw.WriteLine($"arguments.AppendFormatted({parameter.Name}[i]{extraCalls});");
+                                    iw.CloseBracket();
+                                    WriteQuote2(iw, syntaxToken);
+                                }
                             }
                             else if (parameter.Type.IsDictionary)
                             {
-                                string prefix = parameter.Type.IsString ? "Safe" : "";
-                                iw.WriteLine($"foreach (var kv in {parameter.Name})");
-                                iw.OpenBracket();
-                                iw.WriteLine(appendCommandLine);
-                                iw.WriteLine("builder.SafeAppend(kv.Key);");
-                                iw.WriteLine("builder.Append('=');");
-                                iw.WriteLine($"builder.{prefix}Append(kv.Value{extraCalls});");
-                                iw.CloseBracket();
+                                if (parameter.Join == null)
+                                {
+                                    iw.WriteLine($"foreach (var kv in {parameter.Name})");
+                                    iw.OpenBracket();
+                                    iw.WriteLine(appendCommandLine);
+                                    iw.WriteLine("arguments.AppendFormatted(kv.Key);");
+                                    iw.WriteLine("arguments.AppendLiteral('=');");
+                                    iw.WriteLine($"arguments.AppendFormatted(kv.Value{extraCalls});");
+                                    WriteQuote2(iw, syntaxToken);
+                                    iw.CloseBracket();
+                                }
+                                else
+                                {
+                                    iw.WriteLine(appendCommandLine);
+                                    iw.WriteLine($"bool needSeparatorFor{parameter.Name} = false;");
+                                    iw.WriteLine($"foreach (var kv in {parameter.Name})");
+                                    iw.OpenBracket();
+                                    iw.WriteLine($"if (needSeparatorFor{parameter.Name})");
+                                    iw.OpenBracket();
+                                    iw.WriteLine($"arguments.AppendLiteral({JoinToParam(parameter.Join)});");
+                                    iw.CloseBracket();
+                                    iw.WriteLine("arguments.AppendFormatted(kv.Key);");
+                                    iw.WriteLine("arguments.AppendLiteral('=');");
+                                    iw.WriteLine($"arguments.AppendFormatted(kv.Value{extraCalls});");
+                                    iw.WriteLine($"needSeparatorFor{parameter.Name} = true;");
+                                    iw.CloseBracket();
+                                    WriteQuote2(iw, syntaxToken);
+                                }
                             }
                             else
                             {
-                                string prefix = !parameter.Type.IsString ?
-                                    "" :
-                                    syntaxToken.QuoteStyle == SyntaxQuoteStyle.Automatic ?
-                                        "AutoQuote" :
-                                        "Safe";
-                                AppendOneParameter(iw, appendCommandLine, parameter.Name, prefix, extraCalls);
-                            }
-
-                            if (syntaxToken.QuoteStyle != SyntaxQuoteStyle.Automatic)
-                            {
-                                iw.WriteLine("builder.Append('\"');");
+                                iw.WriteLine(appendCommandLine);
+                                iw.WriteLine($"arguments.AppendFormatted({parameter.Name}{extraCalls});");
+                                WriteQuote2(iw, syntaxToken);
                             }
 
                             if (parameter.Type.IsNullable)
@@ -439,20 +511,27 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
 
         iw.CloseBracket();
 
-        static void AppendOneParameter(IndentedTextWriter iw, string appendCommandLine, string parameterName, string appendPrefix, string extraCalls)
+        static void WriteQuote2(IndentedTextWriter iw, SyntaxToken syntaxToken)
         {
-            iw.WriteLine(appendCommandLine);
-            iw.WriteLine($"builder.{appendPrefix}Append({parameterName}{extraCalls});");
+            if (syntaxToken.QuoteStyle != SyntaxQuoteStyle.Automatic)
+            {
+                iw.WriteLine("arguments.AppendLiteral('\"');");
+            }
+        }
+
+        static string JoinToParam(string join)
+        {
+            //TODO: Escape of char ...
+            return join.Length == 1 ? $"'{join[0]}'" : SymbolDisplay.FormatLiteral(join, true);
         }
     }
 
     private static void GenerateBuilderParameter(IndentedTextWriter iw, Parameter parameter, bool isNew)
     {
-        string typeAsString = parameter.Type is { IsBool: true, IsNullable: false } ?
+        string optionalTypeName = parameter.Type is { IsBool: true, IsNullable: false } ?
             "bool" :
-            parameter.Type.IsCollection ?
-                parameter.Type.Name :
-                parameter.Type.AsNullable();
+            parameter.Type.AsNullable();
+
         if (!isNew)
         {
             if (parameter.Type.IsList)
@@ -465,7 +544,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
             }
             else
             {
-                iw.WriteLine($"public {typeAsString} {parameter.Name} {{ get; set; }}");
+                iw.WriteLine($"public {optionalTypeName} {parameter.Name} {{ get; set; }}");
             }
 
             iw.WriteLine();
@@ -489,7 +568,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         }
         else if (parameter.Type.IsList)
         {
-            iw.WriteLine($"public {prefix}Builder Add{parameter.Name}(params {typeAsString}[] values)");
+            iw.WriteLine($"public {prefix}Builder Add{parameter.Name}(params {parameter.Type.Name}[] values)");
             iw.OpenBracket();
             iw.WriteLine($"{parameter.Name}.AddRange(values);");
             iw.WriteLine("return this;");
@@ -503,7 +582,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         }
         else if (parameter.Type.IsDictionary)
         {
-            iw.WriteLine($"public {prefix}Builder Add{parameter.Name}(string key, {typeAsString} value)");
+            iw.WriteLine($"public {prefix}Builder Add{parameter.Name}(string key, {parameter.Type.Name} value)");
             iw.OpenBracket();
             iw.WriteLine($"{parameter.Name}.Add(key, value);");
             iw.WriteLine("return this;");
@@ -517,7 +596,7 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         }
         else
         {
-            iw.WriteLine($"public {prefix}Builder Set{parameter.Name}({typeAsString} value)");
+            iw.WriteLine($"public {prefix}Builder Set{parameter.Name}({optionalTypeName} value)");
             iw.OpenBracket();
             iw.WriteLine($"{parameter.Name} = value;");
             iw.WriteLine("return this;");
@@ -533,25 +612,84 @@ public sealed class ArgumentsGenerator : IIncrementalGenerator
         iw.WriteLine();
     }
 
-    private static string? GetParameterName(
+    private static (string? CommandLine, bool IsSecret, string? Join) GetParameterArguments(
         SyntaxList<AttributeListSyntax> attributeList,
         SemanticModel semanticModel,
         CancellationToken cancellationToken)
     {
-        var expression = attributeList
-            .SelectMany(static a => a.Attributes)
-            .FirstOrDefault(a => a.Name.ToString() is "Parameter" or "ParameterAttribute")?
-            .ArgumentList?
-            .Arguments
-            .FirstOrDefault()?
-            .Expression;
-
-        if (expression == null)
+        if (TryGetAttributeConstructorArguments(
+                attributeList,
+                a => a.Name.ToString() is "Parameter" or "ParameterAttribute",
+                semanticModel,
+                cancellationToken,
+                out var results))
         {
-            return null;
+            return ((string?)results[0], (bool)results[1]!, (string?)results[2]);
         }
 
-        var constant = semanticModel.GetConstantValue(expression, cancellationToken);
-        return constant is { HasValue: true, Value: string s } ? s : null;
+        return default;
+    }
+
+    private static bool TryGetAttributeConstructorArguments(
+        SyntaxList<AttributeListSyntax> attributeList,
+        Func<AttributeSyntax, bool> predicate,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken,
+        [NotNullWhen(true)] out object?[]? results)
+    {
+        var attribute = attributeList
+            .SelectMany(static a => a.Attributes)
+            .FirstOrDefault(predicate);
+
+        if (attribute == null)
+        {
+            results = null;
+            return false;
+        }
+
+        results = GetAttributeConstructorArguments(attribute, semanticModel, cancellationToken);
+        return true;
+    }
+
+    private static object?[] GetAttributeConstructorArguments(
+        AttributeSyntax attribute,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        var attributeConstructor = (IMethodSymbol?)semanticModel.GetSymbolInfo(attribute).Symbol;
+        var parameters = attributeConstructor.Parameters;
+        var arguments = attribute.ArgumentList.Arguments;
+        var results = new object?[parameters.Length];
+        var parameterIndexes = new Dictionary<string, int>();
+        for (int i = 0; i < parameters.Length; ++i)
+        {
+            if (parameters[i].HasExplicitDefaultValue)
+            {
+                results[i] = parameters[i].ExplicitDefaultValue;
+            }
+
+            parameterIndexes.Add(parameters[i].Name, i);
+        }
+
+        for (int i = 0; i < arguments.Count; ++i)
+        {
+            var arg = arguments[i];
+            var value = semanticModel.GetConstantValue(arg.Expression, cancellationToken);
+            if (!value.HasValue)
+            {
+                continue;
+            }
+
+            if (arg.NameColon == null)
+            {
+                results[i] = value.Value;
+            }
+            else
+            {
+                results[parameterIndexes[arg.NameColon.Name.ToString()]] = value.Value;
+            }
+        }
+
+        return results;
     }
 }

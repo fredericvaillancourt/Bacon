@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} nuget {args}")]
+[Syntax("nuget {args}")]
 public abstract partial class DotNetNugetArguments : DotNetArguments
 {
 }

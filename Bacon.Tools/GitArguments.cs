@@ -3,7 +3,7 @@
 namespace Bacon.Tools;
 
 [Tool("git")]
-[Syntax("{args}")]
+[Syntax("")]
 public abstract partial class GitArguments : Arguments
 {
 }

@@ -5,7 +5,7 @@ internal readonly record struct ParamType(string Name, SupportedParamType Type)
     public bool IsBaseReferenceType => (Type & SupportedParamType.String) != 0;
     public bool IsBaseValueType => !IsBaseReferenceType;
 
-    public bool IsReferenceType => (Type & (SupportedParamType.String | SupportedParamType.IsList | SupportedParamType.IsDictionary)) != 0;
+    public bool IsReferenceType => (Type & (SupportedParamType.Enum | SupportedParamType.Bool | SupportedParamType.Numeric | SupportedParamType.Char)) == 0;
     public bool IsValueType => !IsReferenceType;
 
     public bool IsNullable => (Type & SupportedParamType.IsNullable) != 0;

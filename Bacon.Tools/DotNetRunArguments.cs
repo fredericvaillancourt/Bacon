@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} run {args}")]
+[Syntax("run {args}")]
 public partial class DotNetRunArguments : DotNetArguments
 {
     [Parameter("configuration")]

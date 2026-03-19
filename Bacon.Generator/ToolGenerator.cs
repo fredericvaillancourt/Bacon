@@ -51,7 +51,7 @@ public sealed class ToolGenerator : IIncrementalGenerator
             iw.OpenBracket();
             iw.WriteLine("private static readonly object Key = new();");
             iw.WriteLine();
-            iw.WriteLine("public Bacon.Build.ITool<string, Bacon.Build.Result> Tool");
+            iw.WriteLine("public Bacon.Build.CommandLineTool Tool");
             iw.OpenBracket();
             iw.WriteLine($"get => context.GetOrAdd(Key, static ctx => ctx.{GetToolLocationCommand(info.Location)}({SymbolDisplay.FormatLiteral(info.CommandName, true)}{(info.BuildOutputType != null ? $", new {info.BuildOutputType}(ctx.BuildOutput)" : "")}));");
             iw.WriteLine("set => context.Set(Key, value);");

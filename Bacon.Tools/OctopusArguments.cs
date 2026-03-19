@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{args}")]
+[Syntax("")]
 [Tool("Octopus.DotNet.Cli", ToolLocation.Tool)]
 public abstract partial class OctopusArguments : Arguments
 {

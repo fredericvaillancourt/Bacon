@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} restore {args}")]
+[Syntax("restore {args}")]
 public partial class DotNetRestoreArguments : DotNetArguments
 {
     //TODO: No attributes to say it is "filenames" or should we have one, maybe for positional when copy from to?

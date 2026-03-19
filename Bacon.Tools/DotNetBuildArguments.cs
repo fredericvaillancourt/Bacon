@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} build {args}")]
+[Syntax("build {args}")]
 public partial class DotNetBuildArguments : DotNetArguments
 {
     //TODO: No attributes to say it is "filenames" or should we have one, maybe for positional when copy from to?

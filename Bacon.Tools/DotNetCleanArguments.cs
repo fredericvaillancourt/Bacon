@@ -2,7 +2,7 @@
 
 namespace Bacon.Tools;
 
-[Syntax("{base} clean {args}")]
+[Syntax("clean {args}")]
 public partial class DotNetCleanArguments : DotNetArguments
 {
     public string Target { get; }

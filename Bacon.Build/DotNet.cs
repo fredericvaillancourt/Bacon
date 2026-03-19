@@ -4,7 +4,7 @@ public sealed partial class DotNet(Context context)
 {
     private static readonly object Key = new();
 
-    public ITool<string, Result> Tool
+    public CommandLineTool Tool
     {
         get => context.GetOrAdd(Key, static ctx => ctx.SearchForCommand("dotnet"));
         set => context.Set(Key, value);
